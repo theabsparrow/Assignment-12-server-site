@@ -46,11 +46,16 @@ async function run() {
     // survey related api
     app.get('/surveys', async(req, res) => {
       const filter = req.query.filter;
+      const sort = req.query.sort
       let query = {};
       if (filter) {
         query = { ...query, category: filter }
       }
-      const result = await surveyCollection.find(query).toArray()
+      let options = {};
+      if(sort) {
+        options = {sort: {totalVotes: sort==="asc"? 1: -1 }}
+      }
+      const result = await surveyCollection.find(query, options).toArray()
       res.send(result)
     })
 
