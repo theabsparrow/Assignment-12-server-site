@@ -6,7 +6,7 @@ const app = express();
 const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5001;
 require('dotenv').config()
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 
 // middlewire
@@ -57,6 +57,13 @@ async function run() {
       }
       const result = await surveyCollection.find(query, options).toArray()
       res.send(result)
+    })
+
+    app.get('/surveys/:id', async (req, res)=> {
+      const id = req.params.id;
+      const cursor = {_id: new ObjectId(id)};
+      const result = await surveyCollection.findOne(cursor);
+      res.send(result);
     })
 
     // Send a ping to confirm a successful connection
