@@ -6,7 +6,7 @@ const app = express();
 const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5001;
 require('dotenv').config()
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId, Timestamp } = require('mongodb');
 
 
 // middlewire
@@ -14,6 +14,20 @@ app.use(cors());
 app.use(express.json());
 
 
+// verify middlewire
+const verifyToken = (req, res, next) => {
+  if (!req.headers.authorization) {
+    return res.status(401).send({ message: 'forbidden access' });
+  }
+  const token = req.headers.authorization.split(' ')[1];
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+    if (error) {
+      return res.status(401).send({ message: 'forbidden access' })
+    }
+    req.decoded = decoded;
+    next()
+  })
+}
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.psgygfs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -33,6 +47,7 @@ async function run() {
 
     const dataBase = client.db('SurveyAtlas');
     const surveyCollection = dataBase.collection('surveys');
+    const usersCollection = dataBase.collection('users');
 
     // jwt related api
     app.post('/jwt', async (req, res) => {
@@ -43,24 +58,21 @@ async function run() {
       res.send({ token });
     })
 
-    // verify middlewire
-const verifyToken = (req, res, next) => {
-  if(!req.headers.authorization){
-return res.status(401).send({message: 'forbidden access'});
-  }
-  const token = req.headers.authorization.split(' ')[1];
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) =>{
-    if(error) {
-      return res.status(401).send({message: 'forbidden access'})
-    }
-    req.decoded = decoded;
-    next()
-  })
-}
+    // user related api
+    app.post('/user', async (req, res) => {
+      const user = req.body;
+      const query = { email: user?.email };
+      const existUser = await usersCollection.findOne(query);
+      if(existUser) {
+        return res.send({message: "user already exists", insertedId: null})
+      }
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    })
 
 
     // survey related api
-    app.get('/surveys', async(req, res) => {
+    app.get('/surveys', async (req, res) => {
       const filter = req.query.filter;
       const sort = req.query.sort
       let query = {};
@@ -68,16 +80,32 @@ return res.status(401).send({message: 'forbidden access'});
         query = { ...query, category: filter }
       }
       let options = {};
-      if(sort) {
-        options = {sort: {totalVotes: sort==="asc"? 1: -1 }}
+      if (sort) {
+        options = { sort: { totalVotes: sort === "asc" ? 1 : -1 } }
       }
       const result = await surveyCollection.find(query, options).toArray()
       res.send(result)
     })
 
-    app.get('/surveys/:id', async (req, res)=> {
+    // user related api
+    app.put('/user', async (req, res) => {
+      const user = req.body;
+      const options = { upsert: true }
+      const query = { email: user?.email }
+      const updateDoc = {
+        $set: {
+          ...user
+        },
+      }
+      const result = await usersCollection.updateOne(query, updateDoc, options)
+    })
+
+
+
+    // survey related api
+    app.get('/surveys/:id', async (req, res) => {
       const id = req.params.id;
-      const cursor = {_id: new ObjectId(id)};
+      const cursor = { _id: new ObjectId(id) };
       const result = await surveyCollection.findOne(cursor);
       res.send(result);
     })
