@@ -14,7 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 
-// verify middlewire
+// verify jwt middlewire
 const verifyToken = (req, res, next) => {
   if (!req.headers.authorization) {
     return res.status(401).send({ message: 'forbidden access' });
@@ -25,8 +25,43 @@ const verifyToken = (req, res, next) => {
       return res.status(401).send({ message: 'forbidden access' })
     }
     req.decoded = decoded;
-    next()
+    next();
   })
+}
+
+// verify admin middlewire
+const verifyAdmin = async (req, res, next) => {
+  const email = req.decoded.email;
+  const query = {email: email};
+  const user = await usersCollection.findOne(query); 
+  const isAdmin = user?.role === 'Admin';
+  if(!isAdmin){
+    return res.status(403). send({message: "forbidden access"});
+  }
+ next()
+}
+
+// verify surveyor middlewire
+const verifySurveyor = async (req, res, next) => {
+  const email = req.decoded.email;
+  const query = {email: email};
+  const user = await usersCollection.findOne(query); 
+  const isSurveyor = user?.role === 'Surveyor';
+  if(!isSurveyor){
+    return res.status(403). send({message: "forbidden access"});
+  }
+ next()
+}
+// common verified middlewire
+const verifySurveyorAdmin = async (req, res, next) => {
+  const email = req.decoded.email;
+  const query = {email: email};
+  const user = await usersCollection.findOne(query); 
+  const isSurveyorAdmin = (user?.role === 'Surveyor') || (user?.role === 'Admin');
+  if(!isSurveyorAdmin){
+    return res.status(403). send({message: "forbidden access"});
+  }
+ next()
 }
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.psgygfs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -70,6 +105,16 @@ async function run() {
       res.send(result);
     })
 
+    app.get('/users', verifyToken, verifyAdmin, async(req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    })
+
+    app.get('/user/:email', async(req, res) => {
+      const email = req.params.email;
+      const result = await usersCollection.findOne({email});
+      res.send(result);
+    })
 
     // survey related api
     app.get('/surveys', async (req, res) => {
