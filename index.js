@@ -13,7 +13,27 @@ const { MongoClient, ServerApiVersion, ObjectId, Timestamp } = require('mongodb'
 app.use(cors());
 app.use(express.json());
 
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.psgygfs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
+// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  }
+});
+
+async function run() {
+  try {
+
+    // Connect the client to the server	(optional starting in v4.7)
+
+    const dataBase = client.db('SurveyAtlas');
+    const surveyCollection = dataBase.collection('surveys');
+    const usersCollection = dataBase.collection('users');
+
+    
 // verify jwt middlewire
 const verifyToken = (req, res, next) => {
   if (!req.headers.authorization) {
@@ -29,7 +49,7 @@ const verifyToken = (req, res, next) => {
   })
 }
 
-// verify admin middlewire
+    // verify admin middlewire
 const verifyAdmin = async (req, res, next) => {
   const email = req.decoded.email;
   const query = {email: email};
@@ -57,32 +77,12 @@ const verifySurveyorAdmin = async (req, res, next) => {
   const email = req.decoded.email;
   const query = {email: email};
   const user = await usersCollection.findOne(query); 
-  const isSurveyorAdmin = (user?.role === 'Surveyor') || (user?.role === 'Admin');
+  const isSurveyorAdmin = user?.role === 'Surveyor' || user?.role === 'Admin';
   if(!isSurveyorAdmin){
     return res.status(403). send({message: "forbidden access"});
   }
  next()
 }
-
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.psgygfs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  }
-});
-
-async function run() {
-  try {
-
-    // Connect the client to the server	(optional starting in v4.7)
-
-    const dataBase = client.db('SurveyAtlas');
-    const surveyCollection = dataBase.collection('surveys');
-    const usersCollection = dataBase.collection('users');
 
     // jwt related api
     app.post('/jwt', async (req, res) => {
@@ -110,7 +110,7 @@ async function run() {
       res.send(result);
     })
 
-    app.get('/user/:email', async(req, res) => {
+    app.get('/user/:email', verifyToken, async(req, res) => {
       const email = req.params.email;
       const result = await usersCollection.findOne({email});
       res.send(result);
@@ -132,6 +132,18 @@ async function run() {
       res.send(result)
     })
 
+    app.get('/totalSurveys', verifyToken, verifySurveyorAdmin, async(req, res) => {
+      const result = await surveyCollection.find().toArray();
+      res.send(result);
+    })
+
+    app.get('/surveys/:id', async (req, res) => {
+      const id = req.params.id;
+      const cursor = { _id: new ObjectId(id) };
+      const result = await surveyCollection.findOne(cursor);
+      res.send(result);
+    })
+
     // user related api
     app.put('/user', async (req, res) => {
       const user = req.body;
@@ -144,16 +156,7 @@ async function run() {
       }
       const result = await usersCollection.updateOne(query, updateDoc, options)
     })
-
-
-
-    // survey related api
-    app.get('/surveys/:id', async (req, res) => {
-      const id = req.params.id;
-      const cursor = { _id: new ObjectId(id) };
-      const result = await surveyCollection.findOne(cursor);
-      res.send(result);
-    })
+    
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
