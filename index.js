@@ -174,6 +174,7 @@ async function run() {
         const query = {
           ...surveyInfo,
           status: 'publish',
+          report: 'no-report',
           creationTime: formatDate(new Date()),
         }
         const result = await surveyCollection.insertOne(query);
@@ -206,7 +207,7 @@ async function run() {
       res.send(result);
     })
 
-    app.get('/comments/:email', async (req, res) => {
+    app.get('/comments/:email', verifyToken, verifyProUser, async (req, res) => {
       const email = req.params.email;
       const query = { userEmail: email };
       const result = await commentsCollection.find(query).toArray();
@@ -260,7 +261,7 @@ async function run() {
       res.send({ paymentResult, roleResult })
     })
 
-    app.get('/payment', verifyAdmin, async (req, res) => {
+    app.get('/payment',verifyToken, verifyAdmin, async (req, res) => {
       const result = await paymentsCollection.find().toArray();
       res.send(result);
     })
