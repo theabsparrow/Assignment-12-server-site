@@ -33,6 +33,7 @@ async function run() {
     const dataBase = client.db('SurveyAtlas');
     const surveyCollection = dataBase.collection('surveys');
     const usersCollection = dataBase.collection('users');
+    const paymentsCollection = dataBase.collection('payments');
 
     
 // verify jwt middlewire
@@ -159,18 +160,40 @@ const verifySurveyorAdmin = async (req, res, next) => {
     })
 
     // payment related api
-    app.post('/create-payment-intent', async(req, res) => {
-      const {price} = req.body;
-      const amount = parseInt(price * 10);
+    app.post('/create-payment-intent', async (req, res) => {
+      const { price } = req.body;
+      const amount = parseInt(price * 100);
+      console.log(amount, 'amount inside the intent')
 
-       const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
         currency: 'usd',
         payment_method_types: ['card']
-       })
-       res.send({
+      });
+
+      res.send({
         clientSecret: paymentIntent.client_secret
-       })
+      })
+    });
+
+    app.post('/payments', verifyToken, async(req, res) => {
+      const paymentInfo = req.body;
+      const paymentResult = await paymentsCollection.insertOne(paymentInfo);
+      const query = {email: paymentInfo?.email};
+      const isExist = await usersCollection.findOne(query);
+      let roleResult = null;
+      if(isExist){
+        const updateDoc = {
+          $set: {role: 'Pro-User'}
+        }
+        const roleResult = await usersCollection.updateOne(query, updateDoc);
+      }
+      res.send({paymentResult, roleResult})
+    })
+
+    app.get('/payment', verifyAdmin, async(req, res) => {
+      const result = await paymentsCollection.find().toArray();
+      res.send(result);
     })
     
 
