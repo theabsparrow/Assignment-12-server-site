@@ -34,6 +34,7 @@ async function run() {
     const surveyCollection = dataBase.collection('surveys');
     const usersCollection = dataBase.collection('users');
     const paymentsCollection = dataBase.collection('payments');
+    const commentsCollection = dataBase.collection('comments');
 
 
     // verify jwt middlewire
@@ -74,6 +75,17 @@ async function run() {
       }
       next()
     }
+
+    const verifyProUser = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      const isProUser = user?.role === 'Pro-User';
+      if (!isProUser) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next()
+    }
     // common verified middlewire
     const verifySurveyorAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -95,7 +107,7 @@ async function run() {
       res.send({ token });
     })
 
-    // user related api
+    // user related api starts
     app.post('/user', async (req, res) => {
       const user = req.body;
       const query = { email: user?.email };
@@ -117,8 +129,9 @@ async function run() {
       const result = await usersCollection.findOne({ email });
       res.send(result);
     })
+    // user related api ends
 
-    // survey related api
+    // survey related api starts
     app.get('/surveys', async (req, res) => {
       const filter = req.query.filter;
       const sort = req.query.sort
@@ -164,14 +177,42 @@ async function run() {
           creationTime: formatDate(new Date()),
         }
         const result = await surveyCollection.insertOne(query);
-        console.log(result);
         res.send(result);
       }
       catch (error) {
         res.status(500).send({ message: 'Error creating survey', error });
       }
     })
+    // survey related api ends
 
+
+    // comment related api starts
+    app.post('/comment', verifyToken, verifyProUser, async (req, res) => {
+      const paymentInfo = req.body;
+      const result = await commentsCollection.insertOne(paymentInfo);
+      res.send(result);
+    })
+
+    app.get('/comments', verifyToken, async (req, res) => {
+      const result = await commentsCollection.find().toArray();
+      console.log(result);
+      res.send(result);
+    })
+
+    app.get("/comment/:commentid", async (req, res) => {
+      const commentid = req.params.commentid;
+      const query = { commentId: commentid };
+      const result = await commentsCollection.find(query).toArray();
+      res.send(result);
+    })
+
+    app.get('/comments/:email', async (req, res) => {
+      const email = req.params.email;
+      const query = { userEmail: email };
+      const result = await commentsCollection.find(query).toArray();
+      res.send(result);
+    })
+    // comment related api ends
 
 
     // user related api
@@ -187,7 +228,7 @@ async function run() {
       const result = await usersCollection.updateOne(query, updateDoc, options)
     })
 
-    // payment related api
+    // payment related api starts
     app.post('/create-payment-intent', async (req, res) => {
       const { price } = req.body;
       const amount = parseInt(price * 100);
@@ -223,7 +264,7 @@ async function run() {
       const result = await paymentsCollection.find().toArray();
       res.send(result);
     })
-
+    // payment related api ends
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
