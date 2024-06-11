@@ -35,56 +35,56 @@ async function run() {
     const usersCollection = dataBase.collection('users');
     const paymentsCollection = dataBase.collection('payments');
 
-    
-// verify jwt middlewire
-const verifyToken = (req, res, next) => {
-  if (!req.headers.authorization) {
-    return res.status(401).send({ message: 'forbidden access' });
-  }
-  const token = req.headers.authorization.split(' ')[1];
-  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
-    if (error) {
-      return res.status(401).send({ message: 'forbidden access' })
+
+    // verify jwt middlewire
+    const verifyToken = (req, res, next) => {
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: 'forbidden access' });
+      }
+      const token = req.headers.authorization.split(' ')[1];
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+        if (error) {
+          return res.status(401).send({ message: 'forbidden access' })
+        }
+        req.decoded = decoded;
+        next();
+      })
     }
-    req.decoded = decoded;
-    next();
-  })
-}
 
     // verify admin middlewire
-const verifyAdmin = async (req, res, next) => {
-  const email = req.decoded.email;
-  const query = {email: email};
-  const user = await usersCollection.findOne(query); 
-  const isAdmin = user?.role === 'Admin';
-  if(!isAdmin){
-    return res.status(403). send({message: "forbidden access"});
-  }
- next()
-}
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      const isAdmin = user?.role === 'Admin';
+      if (!isAdmin) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next()
+    }
 
-// verify surveyor middlewire
-const verifySurveyor = async (req, res, next) => {
-  const email = req.decoded.email;
-  const query = {email: email};
-  const user = await usersCollection.findOne(query); 
-  const isSurveyor = user?.role === 'Surveyor';
-  if(!isSurveyor){
-    return res.status(403). send({message: "forbidden access"});
-  }
- next()
-}
-// common verified middlewire
-const verifySurveyorAdmin = async (req, res, next) => {
-  const email = req.decoded.email;
-  const query = {email: email};
-  const user = await usersCollection.findOne(query); 
-  const isSurveyorAdmin = user?.role === 'Surveyor' || user?.role === 'Admin';
-  if(!isSurveyorAdmin){
-    return res.status(403). send({message: "forbidden access"});
-  }
- next()
-}
+    // verify surveyor middlewire
+    const verifySurveyor = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      const isSurveyor = user?.role === 'Surveyor';
+      if (!isSurveyor) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next()
+    }
+    // common verified middlewire
+    const verifySurveyorAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      const isSurveyorAdmin = user?.role === 'Surveyor' || user?.role === 'Admin';
+      if (!isSurveyorAdmin) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next()
+    }
 
     // jwt related api
     app.post('/jwt', async (req, res) => {
@@ -100,21 +100,21 @@ const verifySurveyorAdmin = async (req, res, next) => {
       const user = req.body;
       const query = { email: user?.email };
       const existUser = await usersCollection.findOne(query);
-      if(existUser) {
-        return res.send({message: "user already exists", insertedId: null})
+      if (existUser) {
+        return res.send({ message: "user already exists", insertedId: null })
       }
       const result = await usersCollection.insertOne(user);
       res.send(result);
     })
 
-    app.get('/users', verifyToken, verifyAdmin, async(req, res) => {
+    app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     })
 
-    app.get('/user/:email', verifyToken, async(req, res) => {
+    app.get('/user/:email', verifyToken, async (req, res) => {
       const email = req.params.email;
-      const result = await usersCollection.findOne({email});
+      const result = await usersCollection.findOne({ email });
       res.send(result);
     })
 
@@ -134,7 +134,7 @@ const verifySurveyorAdmin = async (req, res, next) => {
       res.send(result)
     })
 
-    app.get('/totalSurveys', verifyToken, verifySurveyorAdmin, async(req, res) => {
+    app.get('/totalSurveys', verifyToken, verifySurveyorAdmin, async (req, res) => {
       const result = await surveyCollection.find().toArray();
       res.send(result);
     })
@@ -145,6 +145,34 @@ const verifySurveyorAdmin = async (req, res, next) => {
       const result = await surveyCollection.findOne(cursor);
       res.send(result);
     })
+
+    // survey posting to database
+    const formatDate = (dateString) => {
+      const date = new Date(dateString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are zero-based
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    app.post('/survey', verifyToken, verifySurveyor, async (req, res) => {
+      try {
+        const surveyInfo = req.body;
+        const query = {
+          ...surveyInfo,
+          status: 'publish',
+          creationTime: formatDate(new Date()),
+        }
+        const result = await surveyCollection.insertOne(query);
+        console.log(result);
+        res.send(result);
+      }
+      catch (error) {
+        res.status(500).send({ message: 'Error creating survey', error });
+      }
+    })
+
+
 
     // user related api
     app.put('/user', async (req, res) => {
@@ -176,26 +204,26 @@ const verifySurveyorAdmin = async (req, res, next) => {
       })
     });
 
-    app.post('/payments', verifyToken, async(req, res) => {
+    app.post('/payments', verifyToken, async (req, res) => {
       const paymentInfo = req.body;
       const paymentResult = await paymentsCollection.insertOne(paymentInfo);
-      const query = {email: paymentInfo?.email};
+      const query = { email: paymentInfo?.email };
       const isExist = await usersCollection.findOne(query);
       let roleResult = null;
-      if(isExist){
+      if (isExist) {
         const updateDoc = {
-          $set: {role: 'Pro-User'}
+          $set: { role: 'Pro-User' }
         }
         const roleResult = await usersCollection.updateOne(query, updateDoc);
       }
-      res.send({paymentResult, roleResult})
+      res.send({ paymentResult, roleResult })
     })
 
-    app.get('/payment', verifyAdmin, async(req, res) => {
+    app.get('/payment', verifyAdmin, async (req, res) => {
       const result = await paymentsCollection.find().toArray();
       res.send(result);
     })
-    
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
