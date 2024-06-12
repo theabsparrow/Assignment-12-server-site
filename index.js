@@ -35,6 +35,7 @@ async function run() {
     const usersCollection = dataBase.collection('users');
     const paymentsCollection = dataBase.collection('payments');
     const commentsCollection = dataBase.collection('comments');
+    const reportsCollection = dataBase.collection('reports');
 
 
     // verify jwt middlewire
@@ -152,6 +153,18 @@ async function run() {
       res.send(result);
     })
 
+    app.patch('/totalsurvey/update/:id', verifyToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const statusInfo = req.body;
+      const query = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: { ...statusInfo }
+      };
+      console.log(updateDoc)
+      const result = await surveyCollection.updateOne(query, updateDoc);
+      res.send(result);
+    })
+
     app.get('/surveys/:id', async (req, res) => {
       const id = req.params.id;
       const cursor = { _id: new ObjectId(id) };
@@ -174,7 +187,7 @@ async function run() {
         const query = {
           ...surveyInfo,
           status: 'publish',
-          report: 'no-report',
+          report: 0 ,
           creationTime: formatDate(new Date()),
         }
         const result = await surveyCollection.insertOne(query);
@@ -256,16 +269,54 @@ async function run() {
         const updateDoc = {
           $set: { role: 'Pro-User' }
         }
-        const roleResult = await usersCollection.updateOne(query, updateDoc);
+        roleResult = await usersCollection.updateOne(query, updateDoc);
       }
       res.send({ paymentResult, roleResult })
     })
 
-    app.get('/payment',verifyToken, verifyAdmin, async (req, res) => {
+    app.get('/payment', verifyToken, verifyAdmin, async (req, res) => {
       const result = await paymentsCollection.find().toArray();
       res.send(result);
     })
     // payment related api ends
+
+
+    // report related api starts
+    app.post('/report', verifyToken, async (req, res) => {
+      const reportInfo = req.body;
+      const surveyId = reportInfo.surveyId
+      const query = {
+        userEmail: reportInfo.userEmail,
+        surveyId: reportInfo.surveyId,
+      }
+      const alreadyExist = await reportsCollection.findOne(query);
+      if (alreadyExist) {
+        return res.status(400).send("you have already reported this survey")
+      }
+      const result = await reportsCollection.insertOne(reportInfo);
+
+      const cursor = { _id: new ObjectId(surveyId) };
+
+      const isExist = await surveyCollection.findOne(cursor);
+
+      let reportResult = null
+      if (isExist) {
+        const updateDoc = {
+          $inc: { report: 1 }
+        }
+        reportResult = await surveyCollection.updateOne(cursor, updateDoc)
+      }
+      res.send({result, reportResult});
+    })
+
+    app.get('/reports/:email',verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const query = { userEmail: email };
+      const result = await reportsCollection.find(query).toArray();
+      res.send(result);
+    })
+
+    // report related api ends
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
