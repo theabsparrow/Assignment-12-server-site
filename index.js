@@ -303,10 +303,9 @@ async function run() {
       }
       const result = await reportsCollection.insertOne(reportInfo);
 
+
       const cursor = { _id: new ObjectId(surveyId) };
-
       const isExist = await surveyCollection.findOne(cursor);
-
       let reportResult = null
       if (isExist) {
         const updateDoc = {
@@ -329,18 +328,67 @@ async function run() {
     // votes related api starts
     app.post('/vote/', async (req, res) => {
       const voteInformation = req.body;
-      const surveyId = voteInformation.surveyId
-      const query = {
-        voterEmail: voteInformation.voterEmail,
-        surveyId: voteInformation.surveyId,
+      const surveyObjId = voteInformation.surveyId;
+      const votes = voteInformation.voteInfo;
+
+
+
+      try {
+
+        const query = {
+          voterEmail: voteInformation.voterEmail,
+          surveyId: voteInformation.surveyId,
+        }
+        const alreadyExist = await votesCollection.findOne(query);
+        if (alreadyExist) {
+          return res.status(400).send("you have already voted in this survey. So you can't vote again")
+        }
+        const result = await votesCollection.insertOne(voteInformation);
+
+        const surveyObjectId = new ObjectId(surveyObjId);
+        const bulkOps = [];
+
+        votes.forEach((vote, index) => {
+          const questionIndex = index;
+          console.log(vote.vote)
+
+          const voteField = vote.vote === 'yes' ? `questions.${questionIndex}.positiveVote` : `questions.${questionIndex}.negativeVote`;
+          console.log(voteField)
+
+          // Increment the vote count for the specific question
+          bulkOps.push({
+            updateOne: {
+              filter: { _id: surveyObjectId },
+              update: { $inc: { [voteField]: 1 } }
+            }
+          });
+        });
+        bulkOps.map(data => {
+          console.log(data.updateOne)
+        })
+
+        const totalYesVotes = votes.filter(vote => vote.vote === 'yes').length;
+        const totalNoVotes = votes.filter(vote => vote.vote === 'no').length;
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: surveyObjectId },
+            update: {
+              $inc: {
+                totalVotes: votes.length,
+                totalYesVotes: totalYesVotes,
+                totalNoVotes: totalNoVotes
+              }
+            }
+          }
+        });
+        const VoteResult = await surveyCollection.bulkWrite(bulkOps);
+        res.status(200).send({result, VoteResult});
+
       }
-      const alreadyExist = await votesCollection.findOne(query);
-      if (alreadyExist) {
-        return res.status(400).send("you have already voted in this survey. So you can't vote again")
+
+      catch (error) {
+        res.status(500).send('Error recording votes: ' + error.message);
       }
-      const result = await votesCollection.insertOne(voteInformation);
-      console.log(result);
-      res.send(result)
     })
     // vote related api ends
 
