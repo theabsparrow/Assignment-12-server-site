@@ -326,15 +326,12 @@ async function run() {
     // report related api ends
 
     // votes related api starts
-    app.post('/vote/', async (req, res) => {
+    app.post('/vote/',verifyToken, async (req, res) => {
       const voteInformation = req.body;
       const surveyObjId = voteInformation.surveyId;
       const votes = voteInformation.voteInfo;
 
-
-
       try {
-
         const query = {
           voterEmail: voteInformation.voterEmail,
           surveyId: voteInformation.surveyId,
@@ -344,18 +341,13 @@ async function run() {
           return res.status(400).send("you have already voted in this survey. So you can't vote again")
         }
         const result = await votesCollection.insertOne(voteInformation);
-
         const surveyObjectId = new ObjectId(surveyObjId);
         const bulkOps = [];
-
         votes.forEach((vote, index) => {
           const questionIndex = index;
           console.log(vote.vote)
-
           const voteField = vote.vote === 'yes' ? `questions.${questionIndex}.positiveVote` : `questions.${questionIndex}.negativeVote`;
           console.log(voteField)
-
-          // Increment the vote count for the specific question
           bulkOps.push({
             updateOne: {
               filter: { _id: surveyObjectId },
@@ -366,7 +358,6 @@ async function run() {
         bulkOps.map(data => {
           console.log(data.updateOne)
         })
-
         const totalYesVotes = votes.filter(vote => vote.vote === 'yes').length;
         const totalNoVotes = votes.filter(vote => vote.vote === 'no').length;
         bulkOps.push({
@@ -383,18 +374,29 @@ async function run() {
         });
         const VoteResult = await surveyCollection.bulkWrite(bulkOps);
         res.status(200).send({result, VoteResult});
-
       }
-
       catch (error) {
         res.status(500).send('Error recording votes: ' + error.message);
       }
     })
+
+
+    app.get('/votes/:email', verifyToken, async(req, res) => {
+      const email = req.params.email;
+      const query = { voterEmail: email };
+      const result = await votesCollection.find(query).toArray();
+      res.send(result);
+    })
+
+    app.get('/votes', verifyToken, verifySurveyorAdmin, async(req, res) => {
+      result = await votesCollection.find().toArray();
+      res.send(result);
+    })
     // vote related api ends
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
