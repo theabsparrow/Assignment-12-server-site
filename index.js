@@ -10,8 +10,15 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const { MongoClient, ServerApiVersion, ObjectId, Timestamp } = require('mongodb');
 
 
+const corsOptions = {
+  origin: ['http://localhost:5173',
+    'https://surveyatlas-1e204.web.app',
+    'https://surveyatlas-1e204.firebaseapp.com',
+  ],
+}
 // middlewire
-app.use(cors());
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.psgygfs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -36,6 +43,7 @@ async function run() {
     const paymentsCollection = dataBase.collection('payments');
     const commentsCollection = dataBase.collection('comments');
     const reportsCollection = dataBase.collection('reports');
+    const votesCollection = dataBase.collection('votes');
 
 
     // verify jwt middlewire
@@ -187,7 +195,7 @@ async function run() {
         const query = {
           ...surveyInfo,
           status: 'publish',
-          report: 0 ,
+          report: 0,
           creationTime: formatDate(new Date()),
         }
         const result = await surveyCollection.insertOne(query);
@@ -306,10 +314,10 @@ async function run() {
         }
         reportResult = await surveyCollection.updateOne(cursor, updateDoc)
       }
-      res.send({result, reportResult});
+      res.send({ result, reportResult });
     })
 
-    app.get('/reports/:email',verifyToken, async (req, res) => {
+    app.get('/reports/:email', verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = { userEmail: email };
       const result = await reportsCollection.find(query).toArray();
@@ -317,6 +325,24 @@ async function run() {
     })
 
     // report related api ends
+
+    // votes related api starts
+    app.post('/vote/', async (req, res) => {
+      const voteInformation = req.body;
+      const surveyId = voteInformation.surveyId
+      const query = {
+        voterEmail: voteInformation.voterEmail,
+        surveyId: voteInformation.surveyId,
+      }
+      const alreadyExist = await votesCollection.findOne(query);
+      if (alreadyExist) {
+        return res.status(400).send("you have already voted in this survey. So you can't vote again")
+      }
+      const result = await votesCollection.insertOne(voteInformation);
+      console.log(result);
+      res.send(result)
+    })
+    // vote related api ends
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
